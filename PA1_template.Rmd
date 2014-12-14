@@ -8,15 +8,127 @@ output:
 
 ## Loading and preprocessing the data
 
+### Load
 
+The dataset for this assignment is available from the Reproducible
+Research course website:
+
+* Data: [Acvitity monitoring data](https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip)
+
+Uncompress and read the **activity** dataset (activity.zip) from the current working directory.  
+
+```{r load}
+unzip("activity.zip")
+activity <- read.csv(file = "activity.csv")
+```
+
+### Preprocess
+
+There are three variables in this dataset:
+
+* **steps** Number of steps taken by the subject in 5-minute intervals.
+Missing values are coded as `NA`.
+
+Missing values are treated later in this assignment so no preprocessing is 
+done.
+
+* **date** Date on which the measurement was taken in YYYY-MM-DD format.
+
+Dates are converted to R date class.
+
+```{r process.date}
+activity <- transform(activity, date = as.Date(date, format = "%Y-%m-%d"))
+```
+
+* **interval** Integer identifier for the 5-minute interval for which the
+measurement was taken.  Format is HHMM (24-hour time) stored as an 
+integer (so no leading zeros).
+
+For this assingment the interval variable serves merely as 
+a label for each of the `r 24*60/5` 5-minute intervals that comprise a day.
+For plotting purposes it is convenient to make the interval variable
+into a datetime 
+class explicitly so that ggplot will correctly interpret it as a time.
+Rather than convert the existing interval variable, it is replaced
+by a newly constructed vector of POSIXct class: a sequence of times 
+starting at midnight and incremented in 5-minute intervals.
+
+```{r process.interval}
+activity <- transform(activity, interval = seq(origin, by = "5 min", length.out = 24*60/5))
+```
+
+Note:  If the interval variable were left as an integer, 
+there would exist unwanted
+gaps (..., 50, **55, 100**, 105, 110, ...) in time-series plots as an 
+artifact of the integer representation.
 
 ## What is mean total number of steps taken per day?
 
+For this part of the assignment missing values are ignored.
 
+Activity data is grouped by day and then the total number of steps is
+summed for each day.
+
+```{r analysis1, message = FALSE}
+library(dplyr)
+
+by.date <- group_by(activity, date)
+steps.per.day <- summarize(by.date, total = sum(steps))
+```
+
+Histogram of the total number of steps taken each day.
+
+```{r hist1}
+hist(steps.per.day$total,
+     col = "wheat",
+     main = "Daily Step Totals",
+     xlab = "Number of Steps")
+```
+
+Summary of the total steps per day:
+
+```{r}
+mean.steps <- as.integer(mean(steps.per.day$total, na.rm = TRUE))
+median.steps <- median(steps.per.day$total, na.rm = TRUE)
+```
+
+* **mean**:  `r mean.steps` steps/day.
+* **median**: `r median.steps` steps/day.
 
 ## What is the average daily activity pattern?
 
+For this section we look at average activity over the course of the day.
+The data is grouped by interval and averaged over all days.  (Missing data
+is excluded.)
 
+```{r analysis2}
+by.interval <- group_by(activity, interval)
+
+mean.steps.per.interval <- summarize(by.interval, interval.mean = mean(steps, na.rm = TRUE))
+```
+
+Create a time-series plot of mean steps for each interval.
+
+```{r time.series2}
+library(ggplot2)
+library(scales)
+
+ggplot(mean.steps.per.interval, 
+       aes(x= interval, y = interval.mean, group=1)) +
+    geom_line() +
+    labs(title = "Mean Steps Time Series") +
+    labs(y = "Mean Steps") +
+    scale_x_datetime("", labels = date_format("%H:%M"))
+```
+
+### Time interval with most activity
+
+```{r}
+max.interval <- mean.steps.per.interval$interval[order(mean.steps.per.interval$interval.mean, decreasing = TRUE)[1]]
+```
+
+Mean number of steps is a maximum for the interval at:
+`r format(max.interval, "%H:%M")`. Our subject is a morning person.
 
 ## Imputing missing values
 
