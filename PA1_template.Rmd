@@ -118,7 +118,7 @@ ggplot(mean.steps.per.interval,
     geom_line() +
     labs(title = "Mean Steps Time Series") +
     labs(y = "Mean Steps") +
-    scale_x_datetime("", labels = date_format("%H:%M"))
+    scale_x_datetime("Time", labels = date_format("%H:%M"))
 ```
 
 ### Time interval with most activity
@@ -132,6 +132,130 @@ Mean number of steps is a maximum for the interval at:
 
 ## Imputing missing values
 
+Calculate the total number of missing values in the activity dataset.
 
+```{r analysis3}
+missing.total <- sum(is.na(activity$steps))
+```
+
+There are `r missing.total` missing values 
+out of `r length(activity$steps)` total observations.
+
+### Strategy for imputing missing values
+
+It turns out that the missing values correspond to entire days for which
+no data is reported.  A simple method for filling in the missing data is
+adopted.  Each missing data point is replaced with the mean number of steps
+for the corresponding time interval, averaged over all days.  For example
+if a data point is missing for the 8:00 interval on a given day, it is 
+replaced with the average step total for the 8:00 interval, averaged over
+all days for which there is data.  
+
+This method may require improvement if there are significant patterns in
+the data that vary across days.  For example, if weekday activity is 
+different from weekend activity, 
+or our subject goes running wednesday mornings.
+
+Create a new dataset, equivalent to the original activity dataset
+but with missing values imputed according to the above strategy.
+
+```{r analysis3.impute}
+# If steps is missing, use the interval mean calculated earlier
+# in part 2 of the analysis.  Otherwise keep the existing number
+# of steps.
+
+activity.imputed <- transform(activity, steps = ifelse(is.na(steps),
+                             mean.steps.per.interval$interval.mean, 
+                             steps)
+    )
+```
+
+Repeat the analysis from part 1, now including
+imputed values for missing data.
+
+```{r}
+# Group data by date.
+
+by.date.imputed <- group_by(activity.imputed, date)
+
+# Summarize:  Calculate total steps per day.  
+
+steps.per.day.imputed <- summarize(by.date.imputed, total = sum(steps))
+```
+
+Histogram of daily step totals.
+
+```{r hist3}
+hist(steps.per.day.imputed$total,
+     col = "palegreen",
+     main = "Daily Step Totals (Imputed)",
+     xlab = "Number of Steps")
+```
+
+Summary of the total steps per day:
+
+```{r}
+mean.steps.imputed <- as.integer(mean(steps.per.day.imputed$total))
+median.steps.imputed <- as.integer(median(steps.per.day.imputed$total))
+```
+
+* **mean**:  `r mean.steps.imputed` steps/day.
+* **median**: `r median.steps.imputed` steps/day.
+
+Inclusion of imputed values in place of missing data does not affect
+the mean at all because of the nature of the missing data (all or nothing
+missing for a given day) and the method used to impute (using mean
+data).  The median is only slightly altered.
+
+Comparison of the two histograms shows that filling in the missing data
+has artificially concentrated values around the mean.  The bin containing
+the mean total steps per day is noticably fuller in the plot incorporating
+imputed values.
 
 ## Are there differences in activity patterns between weekdays and weekends?
+
+For the final part of the assignment we look for differences between
+weekday and weekend activity patterns.  The dataset constructed with
+imputed missing values is used for this analysis.
+
+First a new factor variable, daytype, is constructed with two levels,
+"weekday" and "weekend," to distinguish between the two categories of
+day.
+
+```{r analysis4.daytype}
+activity.imputed$daytype <- factor(
+    sapply(weekdays(activity.imputed$date), function(day) {
+        if (day %in% c("Saturday", "Sunday")) "Weekend" else "Weekday"
+    }))
+```
+
+Now we want to mimic the analysis of part 2, looking at a time series
+of activity for the day, but this time segregated into weekday and 
+weekend data subsets.
+
+```{r}
+# Group data by interval and daytype (weekday/weekend).
+
+by.group.imputed <- group_by(activity.imputed, interval, daytype)
+
+# Summarize:  Calculate mean steps per interval (averaged across all days).
+
+mean.steps.per.group.imputed <- summarize(by.group.imputed, interval.mean = mean(steps))
+
+```
+
+Panel plots of activity time series comparing weekday to weekend.
+
+```{r panel.plot}
+ggplot(mean.steps.per.group.imputed, 
+       aes(x= interval, y = interval.mean, group=1)) +
+    geom_line() +
+    facet_wrap(~daytype, ncol = 1) +
+    labs(title = "Daily Time Series") +
+    labs(y = "Mean Steps") +
+    scale_x_datetime("Time", labels = date_format("%H:%M"))
+```
+
+There are differences between weekday and weekend activity patterns
+as evidenced by the pair of time series plots.  How much is real and
+how much is noise would require further analysis.
